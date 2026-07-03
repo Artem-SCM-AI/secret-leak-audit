@@ -54,5 +54,31 @@ if [ -f "$fakehome/.git-hooks/pre-commit" ]; then
   rm -rf "$fakehome"; exit 1
 fi
 
+# Case 4: $HOME exists but is not writable (e.g. permission-denied) -> the
+# script must fail loudly (non-zero exit, *_FAILED message) rather than
+# silently reporting success while every write actually failed underneath it.
+permhome=$(mktemp -d "${TMPDIR:-/tmp}/sla-perm.XXXXXX")
+chmod 555 "$permhome"
+out4=$(HOME="$permhome" bash scripts/harden-install.sh 2>&1)
+exit4=$?
+chmod 755 "$permhome"
+if [ "$exit4" -eq 0 ]; then
+  echo "FAIL: expected non-zero exit on permission-denied HOME, got exit 0. Output: $out4"
+  rm -rf "$permhome"; rm -rf "$fakehome"; exit 1
+fi
+if ! echo "$out4" | grep -q "TOML_INSTALL_FAILED"; then
+  echo "FAIL: expected TOML_INSTALL_FAILED on permission-denied HOME, got: $out4"
+  rm -rf "$permhome"; rm -rf "$fakehome"; exit 1
+fi
+if echo "$out4" | grep -qE "TOML_INSTALLED|HOOK_INSTALLED|HOOKSPATH_SET"; then
+  echo "FAIL: script falsely reported success on permission-denied HOME: $out4"
+  rm -rf "$permhome"; rm -rf "$fakehome"; exit 1
+fi
+if [ -f "$permhome/.gitleaks.toml" ]; then
+  echo "FAIL: .gitleaks.toml should not exist after a failed write"
+  rm -rf "$permhome"; rm -rf "$fakehome"; exit 1
+fi
+rm -rf "$permhome"
+
 rm -rf "$fakehome"
 echo "PASS: test-harden-install.sh"
