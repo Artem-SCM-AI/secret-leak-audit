@@ -1,0 +1,25 @@
+#!/bin/bash
+GITLEAKS_CONFIG="${GITLEAKS_CONFIG:-$HOME/.gitleaks.toml}"
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "❌ gitleaks not found — commit blocked (fail-closed)." >&2
+  echo "   Install gitleaks, or see this repo's README for the emergency override." >&2
+  exit 1
+fi
+
+if [ ! -f "$GITLEAKS_CONFIG" ]; then
+  echo "❌ gitleaks config not found at $GITLEAKS_CONFIG — commit blocked (fail-closed)." >&2
+  exit 1
+fi
+
+gitleaks git --staged --no-banner --config "$GITLEAKS_CONFIG"
+status=$?
+
+if [ $status -ne 0 ]; then
+  echo "" >&2
+  echo "❌ gitleaks: secrets detected. Commit blocked." >&2
+  echo "   Remove the secret before committing." >&2
+  exit 1
+fi
+
+exit 0
