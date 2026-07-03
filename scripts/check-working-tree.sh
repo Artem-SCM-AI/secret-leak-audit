@@ -30,9 +30,14 @@ while IFS= read -r -d '' entry; do
       gitleaks detect --no-git --source="$full" --config "$cfg" --no-banner \
         --report-format json --report-path "$report" >/dev/null 2>&1
       if [ -s "$report" ] && [ "$(cat "$report")" != "[]" ] && [ "$(cat "$report")" != "null" ]; then
-        jq -r --arg f "$file" '.[] | "\($f):\(.StartLine) rule=\(.RuleID)"' "$report" 2>/dev/null | \
-        while IFS= read -r line; do
-          redact_line "HIT $line"
+        # Redact only the file:line portion, never the rule ID (see
+        # check-tracked-history.sh for why: rule IDs come from our own
+        # fixed config, not repo content, and several are 12+ chars long
+        # enough to falsely trip redact_line's generic heuristic).
+        jq -r --arg f "$file" '.[] | "\($f):\(.StartLine)\t\(.RuleID)"' "$report" 2>/dev/null | \
+        while IFS=$'\t' read -r loc ruleid; do
+          redacted_loc=$(redact_line "$loc")
+          echo "HIT $redacted_loc rule=$ruleid"
         done
       fi
       rm -f "$report"

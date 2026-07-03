@@ -10,6 +10,12 @@ id = "test-token"
 description = "Test Token"
 regex = '''TESTTOKEN_[A-Za-z0-9]{20,}'''
 tags = ["test"]
+
+[[rules]]
+id = "aws-access-key"
+description = "AWS Access Key (test copy, real rule id length: 14 chars)"
+regex = '''AKIA[A-Z0-9]{16}'''
+tags = ["test"]
 EOF
 
 repo=$(make_test_repo)
@@ -32,6 +38,26 @@ if ! echo "$out" | grep -q "config.txt"; then
   cleanup_test_repo "$repo"; rm -f "$cfg"
   exit 1
 fi
+
+# Regression: a rule ID of 12+ chars (like real ones — aws-access-key is 14,
+# google-service-account-key-id is 29) must reach the output completely
+# intact. redact_line's generic 12+-char heuristic used to also catch the
+# rule ID itself, mangling it into "<14-char-redacted>" and silently
+# breaking the guided-fix step's ability to give provider-specific pointers
+# for the vast majority of real findings — this was only caught by an
+# actual live run against a realistic rule name, not by these tests
+# (which originally only used the 10-char "test-token" id).
+repo_aws=$(make_test_repo)
+aws_key_prefix="AKIA"
+aws_key_suffix="IOSFODNN7EXAMPLE"
+seed_history_secret "$repo_aws" "settings.py" "AWS_KEY=${aws_key_prefix}${aws_key_suffix}"
+out_aws=$(bash scripts/check-tracked-history.sh "$repo_aws" "$cfg")
+if ! echo "$out_aws" | grep -q "rule=aws-access-key$"; then
+  echo "FAIL: expected the rule id 'aws-access-key' intact in output, got: $out_aws"
+  cleanup_test_repo "$repo"; cleanup_test_repo "$repo_aws"; rm -f "$cfg"
+  exit 1
+fi
+cleanup_test_repo "$repo_aws"
 
 # Clean repo — no output expected.
 repo2=$(make_test_repo)

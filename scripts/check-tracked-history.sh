@@ -45,8 +45,15 @@ if [ $work_status -ge 128 ]; then
 fi
 
 if [ -s "$report" ] && [ "$(cat "$report")" != "[]" ] && [ "$(cat "$report")" != "null" ]; then
-  jq -r '.[] | "\(.File):\(.StartLine) rule=\(.RuleID)"' "$report" 2>/dev/null | while IFS= read -r line; do
-    redact_line "HIT $line"
+  # Redact only the file:line portion. The rule ID is never redacted: it is
+  # drawn from our own fixed config (config/default-gitleaks.toml), never
+  # from repo content, so it cannot be a secret — and rule IDs like
+  # "aws-access-key" (14 chars) are long enough to trip redact_line's
+  # generic 12+-char heuristic, which would otherwise scramble the exact
+  # signal the guided-fix step needs to give provider-specific pointers.
+  jq -r '.[] | "\(.File):\(.StartLine)\t\(.RuleID)"' "$report" 2>/dev/null | while IFS=$'\t' read -r loc ruleid; do
+    redacted_loc=$(redact_line "$loc")
+    echo "HIT $redacted_loc rule=$ruleid"
   done
 fi
 
