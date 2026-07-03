@@ -80,5 +80,28 @@ if [ -f "$permhome/.gitleaks.toml" ]; then
 fi
 rm -rf "$permhome"
 
+# Case 5: global core.hooksPath is already set to a genuinely foreign
+# location (not the one this tool would install) -> the Non-Destructive
+# Install Principle requires the script to explain it's pointing elsewhere
+# and stop, never overriding it. This is distinct from Case 2, where the
+# pre-existing value happened to equal the tool's own target.
+foreignhome=$(mktemp -d "${TMPDIR:-/tmp}/sla-foreign.XXXXXX")
+foreign_hp="/some/genuinely/foreign/hooks/dir"
+HOME="$foreignhome" git config --global core.hooksPath "$foreign_hp"
+
+out5=$(HOME="$foreignhome" bash scripts/harden-install.sh)
+if ! echo "$out5" | grep -q "HOOKSPATH_PRESERVED_EXISTING=$foreign_hp"; then
+  echo "FAIL: expected HOOKSPATH_PRESERVED_EXISTING=$foreign_hp on foreign hooksPath, got: $out5"
+  rm -rf "$foreignhome"; rm -rf "$fakehome"; exit 1
+fi
+
+remaining_foreign_hp=$(HOME="$foreignhome" git config --global --get core.hooksPath 2>/dev/null || true)
+if [ "$remaining_foreign_hp" != "$foreign_hp" ]; then
+  echo "FAIL: foreign core.hooksPath was overwritten. Expected '$foreign_hp', got: '$remaining_foreign_hp'"
+  rm -rf "$foreignhome"; rm -rf "$fakehome"; exit 1
+fi
+
+rm -rf "$foreignhome"
+
 rm -rf "$fakehome"
 echo "PASS: test-harden-install.sh"
