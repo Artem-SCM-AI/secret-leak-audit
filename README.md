@@ -21,8 +21,9 @@ target for a malicious lookalike.
 ## Requirements
 
 - Claude Code CLI, installed and authorized
-- `gitleaks` (the tool installs this for you on macOS/Linux if missing;
-  on Windows you'll need to install it manually — see below)
+- `gitleaks` (the tool installs this for you on macOS via Homebrew if
+  missing; on Linux and Windows you'll need to install it manually —
+  see below)
 - Optional: `gh` CLI, authenticated, for public/private repo visibility
   checks (skipped gracefully if not present)
 
